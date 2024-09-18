@@ -1,11 +1,24 @@
 #include <msp430.h> 
 #define DUTY_CYCLE_MS 15
 
+
 void initTimer_A(void);
 void initPort1(void);
+void initPort2(void);
+
+enum color {
+    Red = 2,
+    Green = 8,
+    Blue = 32,
+    Yellow = 10,
+    Cyan = 40,
+    Magenta = 34,
+    White = 42
+};
 
 char state = 0;                                             // Create state bit to keep track of state
-int color_value[7] = {2, 8, 10, 32, 34, 40, 42};            // Array to keep track of the colors
+char color_value[7] = {Red, Green, Blue,
+                       Yellow, Cyan, Magenta, White};       // Array to keep track of the colors
 char prev_color;
 int OFCount;                                                // Value to keep track of our timer counts
 
@@ -18,14 +31,13 @@ int OFCount;                                                // Value to keep tra
  */
 void main(void) {
 	WDTCTL = WDTPW | WDTHOLD;	                            // stop watchdog timer
-	P2DIR = 42;                                             // Set Pin 2 pins to output
-	BCSCTL1 = CALBC1_1MHZ;                                  //
-	DCOCTL = CALDCO_1MHZ;                                   //
-	initTimer_A();
-	initPort1();
+	BCSCTL1 = CALBC1_1MHZ;                                  // Clock stuff
+	DCOCTL = CALDCO_1MHZ;                                   // Clock stuff
+	initTimer_A();                                          // Initialize Timer A
+	initPort1();                                            // Initialize Port 1
+	initPort2();                                            // Initialize Port 2
 	_enable_interrupt();                                    // Enabling interrupts
-	prev_color = color_value[0];
-	OFCount = 0;                                            //
+	OFCount = 0;                                            // Set Count to 0
 	TACCR0 = 12500 - 1;                                     // Set Timer to 50 ms, based off of 1 MHZ / 4 = 250 KHZ clock
 	while(1);                                               // Almighty while loop
 }
@@ -42,13 +54,23 @@ void initTimer_A(void){
 }
 
 /*
- *
+ * initPort1 - Initialization of Port 1
+ * By Joshua Kauffman and Patrick Cur
 */
 void initPort1(void){
-    P1DIR = 0;                                              // Set Pin 1 to input for P1.3
+    P1DIR &= ~BIT3;                                         // Set Pin 1 to input for P1.3
     P1REN |= BIT3;                                          // Set Pin 1.3 resistor
     P1OUT |= BIT3;                                          // Pull up resistor
     P1IE |= BIT3;                                           // Enable Pin 1 interrupt
+}
+
+/*
+ * initPort2 - Initialization of Port 2
+ * By Joshua Kauffman and Patrick Cur
+*/
+void initPort2(void){
+    P2DIR |= (BIT1 + BIT3 + BIT5);                          // Set Pin 2.1, 2.3, and 2.5 to output
+    P2OUT = 0;                                              // Initialize output to 0
 }
 
 /*
@@ -61,15 +83,16 @@ void initPort1(void){
 __interrupt void Timer_A_CCR0_ISR(void) {
     OFCount++;
     if(OFCount >= DUTY_CYCLE_MS){
-        if(P2OUT == 0) prev_color = color_value[state];
-        P2OUT ^= prev_color;
+        if(P2OUT == 0) prev_color = color_value[state];     // Check to see if LED is on, if off, update color
+        P2OUT ^= prev_color;                                // Blink LED
         OFCount = 0;
     }
 }
 
 /*
- * Port1 ISR - Interrupt Service routine for Port 1
+ * Port1_ISR - Interrupt Service routine for Port 1
  * If selected pin goes low, trigger ISR
+ * Button press increments state bit, until at final state then resets
  * By Joshua Kauffman and Patrick Cut
  */
 #pragma vector = PORT1_VECTOR
